@@ -14,13 +14,15 @@ public final class PrivateAggregate {
         public init(description: String) { self.description = description }
     }
 
-    public init(subDevices: [OutputDevice]) throws {
+    /// `tapUID`: optional process tap whose audio becomes the aggregate's input,
+    /// drift-compensated to the clock device like the second speaker.
+    public init(subDevices: [OutputDevice], tapUID: String? = nil) throws {
         guard let clock = subDevices.first else { throw Failure(description: "no sub-devices") }
         let subList: [[String: Any]] = subDevices.map {
             [kAudioSubDeviceUIDKey: $0.uid,
              kAudioSubDeviceDriftCompensationKey: $0.uid == clock.uid ? 0 : 1]
         }
-        let desc: [String: Any] = [
+        var desc: [String: Any] = [
             kAudioAggregateDeviceNameKey: "SpeakerSync PoC",
             kAudioAggregateDeviceUIDKey: "local.speakersync.poc.\(UUID().uuidString)",
             kAudioAggregateDeviceIsPrivateKey: 1,
@@ -28,6 +30,9 @@ public final class PrivateAggregate {
             kAudioAggregateDeviceMainSubDeviceKey: clock.uid,
             kAudioAggregateDeviceSubDeviceListKey: subList,
         ]
+        if let tapUID {
+            desc[kAudioAggregateDeviceTapListKey] = [[kAudioSubTapUIDKey: tapUID, kAudioSubTapDriftCompensationKey: 1]]
+        }
         var newID = AudioObjectID(kAudioObjectUnknown)
         let status = AudioHardwareCreateAggregateDevice(desc as CFDictionary, &newID)
         guard status == noErr, newID != kAudioObjectUnknown else {

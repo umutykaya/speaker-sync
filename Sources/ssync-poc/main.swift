@@ -9,6 +9,8 @@ func usage() -> Never {
     usage:
       ssync-poc list
       ssync-poc play --out <UID> [--out <UID>] (--file <path> | --click) [--delay1 ms] [--delay2 ms] [--master 0..1]
+      ssync-poc live --out <UID> [--out <UID>] [--app <bundle id>]... [--delay1 ms] [--delay2 ms] [--master 0..1]
+                     route system audio (all apps, or only --app ones, e.g. com.spotify.client)
 
     The first --out is the aggregate clock device; the second gets drift compensation.
     Interactive commands while playing (output index is 1 or 2):
@@ -36,6 +38,7 @@ if command == "list" {
     for d in devices { printDevice(d); print("") }
     exit(0)
 }
+if command == "live" { runLive(args) }
 guard command == "play" else { usage() }
 
 var outUIDs: [String] = []

@@ -15,13 +15,15 @@ interface State {
   notices: string[];
   positionSeconds: number;
   durationSeconds: number;
-  source: { kind: "click" | "track"; trackId?: string; name: string };
+  source: { kind: "click" | "track" | "live"; trackId?: string; name: string };
   master: number;
   outputs: OutputState[];
   devices: DeviceState[];
   tracks: Track[];
   profiles: ProfileState[];
   sampleRate?: number;
+  inputLevelDb?: number;
+  liveSilentSeconds?: number;
   serverTime: string;
 }
 
@@ -29,6 +31,10 @@ const TOKEN_KEY = "ssync.token";
 const MUTE_KEY = "ssync.unmuteGain";
 const POLL_MS = 1000;
 const MAX_DELAY = 2000;
+const LIVE_SOURCES: [string, string, string][] = [
+  ["com.spotify.client", "Spotify", "Whatever Spotify plays on this Mac"],
+  ["all", "All Mac audio", "Every app, including notification sounds"],
+];
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -170,11 +176,13 @@ function applyState(s: State): void {
   $("source-name").textContent = s.source.name;
 
   const playing = s.status === "playing";
-  $("icon-play").hidden = playing;
-  $("icon-pause").hidden = !playing;
+  // SVG elements have no .hidden property; toggle the attribute instead.
+  document.getElementById("icon-play")!.toggleAttribute("hidden", playing);
+  document.getElementById("icon-pause")!.toggleAttribute("hidden", !playing);
   $("btn-play").setAttribute("aria-label", playing ? "Pause" : "Play");
   const active = s.status === "playing" || s.status === "paused" || s.status === "ended";
   for (const id of ["btn-play", "btn-stop", "seek"]) ($(id) as HTMLButtonElement | HTMLInputElement).disabled = !active;
+  renderLive(s);
 
   const seek = $<HTMLInputElement>("seek");
   seek.max = String(s.durationSeconds);
@@ -194,7 +202,7 @@ function applyState(s: State): void {
 
   renderNotices(s.notices);
   renderBanner();
-  if (!prev || sig(prev.tracks) !== sig(s.tracks) || prev.source.trackId !== s.source.trackId || prev.source.kind !== s.source.kind) renderTracks(s);
+  if (!prev || sig(prev.tracks) !== sig(s.tracks) || sig(prev.source) !== sig(s.source)) renderTracks(s);
   if (!prev || sig(prev.profiles) !== sig(s.profiles)) renderProfiles(s.profiles);
   renderDevices(s, !prev || sig(prev.devices) !== sig(s.devices) || sig(prev.outputs.map(o => o.uid)) !== sig(s.outputs.map(o => o.uid)));
   $("updated").textContent = `Updated ${new Date().toLocaleTimeString()}`;
@@ -206,9 +214,35 @@ function applyState(s: State): void {
 
 const sig = (v: unknown) => JSON.stringify(v);
 
+/// Live source: no timeline; show the input level and explain silence.
+function renderLive(s: State): void {
+  const live = s.source.kind === "live";
+  $("seek-wrap").hidden = live;
+  $("live").hidden = !live;
+  $("btn-play").setAttribute("aria-label", live ? (s.status === "playing" ? "Mute speakers" : "Unmute speakers") : (s.status === "playing" ? "Pause" : "Play"));
+  const hint = $("live-hint");
+  if (!live) { hint.hidden = true; return; }
+  const db = s.inputLevelDb;
+  $("meter-bar").style.width = db === undefined ? "0" : `${Math.max(0, Math.min(100, ((db + 60) / 60) * 100))}%`;
+  $("live-level").textContent = db === undefined ? "silent" : `${Math.round(db)} dB`;
+  const silent = s.liveSilentSeconds === undefined || s.liveSilentSeconds < 0 || s.liveSilentSeconds > 5;
+  if (s.status === "playing" && silent) {
+    const app = s.source.name === "Spotify" ? "Spotify" : "an app";
+    hint.textContent = `No audio received. Start playback in ${app} on this Mac` +
+      (app === "Spotify" ? " (or choose this Mac in Spotify Connect on your phone)" : "") +
+      ". If it is playing and this stays silent, allow SpeakerSync under System Settings → Privacy & Security → Screen & System Audio Recording → System Audio Recording Only, then press Reconnect.";
+    hint.hidden = false;
+  } else if (s.status === "paused") {
+    hint.textContent = "Speakers are muted. Press play to hear the Mac's audio on them.";
+    hint.hidden = false;
+  } else {
+    hint.hidden = true;
+  }
+}
+
 /// Between polls, advance the position locally so the slider moves smoothly.
 function renderPosition(): void {
-  if (!state || busyControls.has("seek")) return;
+  if (!state || busyControls.has("seek") || state.source.kind === "live") return;
   let pos = state.positionSeconds;
   if (state.status === "playing") {
     pos += (performance.now() - stateAt) / 1000;
@@ -396,6 +430,12 @@ function renderTracks(s: State): void {
     return li;
   };
   const items = [
+    ...LIVE_SOURCES.map(([target, title, sub]) => {
+      const li = item(title, sub, s.source.kind === "live" && s.source.name === title,
+        () => act(() => post("source", { live: target }), `Connecting ${title}…`));
+      li.querySelector(".title")!.append(el("span", { class: "tag" }, "LIVE"));
+      return li;
+    }),
     item("Calibration click", "1 per second, every 4th is higher", s.source.kind === "click",
       () => act(() => post("source", { trackId: null }), "Loading click…")),
     ...s.tracks.map(t => item(t.name, `${fmtTime(t.durationSeconds)} · ${fmtSize(t.bytes)}`, s.source.trackId === t.id,

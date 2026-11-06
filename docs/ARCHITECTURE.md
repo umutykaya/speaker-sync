@@ -44,9 +44,24 @@ A delay change of Δ ms means one speaker must either repeat or skip Δ ms of au
 
 Outputs are stored by CoreAudio UID (the Bluetooth MAC address for these speakers) plus the display name. At start or Reconnect, outputs are matched by UID first. If a UID is missing, the service uses a present device with the same name, but only if exactly one has it. It then updates the UID and reports a notice. If neither works, it reports that the speaker is not connected and stays stopped.
 
+## Live Mac audio (Spotify / all apps)
+
+```
+Spotify ──► Core Audio process tap (muted while tapped) ──► private aggregate input
+                                                            │  (drift-compensated, like speaker 2)
+                         one IOProc on the aggregate ◄──────┘
+                           ring buffer (≈5.9 s) ── speaker n reads at write − delay_n ──► aggregate outputs
+```
+
+- `SystemTap` creates a private process tap (macOS 14.2+). `.apps(["com.spotify.client"])` taps one app by bundle ID (macOS 26+, survives app relaunches); `.allApps` taps everything except ssyncd itself, so our own output is never re-captured.
+- `muteBehavior = .mutedWhenTapped`: the tapped apps are silent on their normal output device while the tap runs, so music is not heard twice.
+- The tap is added to the same private aggregate as the speakers (`kAudioAggregateDeviceTapListKey`, drift compensation on). One IOProc receives the tap input and writes all speaker outputs in the same cycle, so per-speaker delay works exactly as for files, and a calibration done with the click applies unchanged.
+- Permission: capturing other apps' audio needs System Audio Recording consent. Without it macOS delivers silence, not an error, so the UI shows the input level and explains silence. The installer wraps ssyncd in a minimal ad-hoc-signed `SpeakerSync.app` with `NSAudioCaptureUsageDescription` so macOS has an identity to attach the consent to.
+- Known quirk: creating a bundle-ID tap right after tearing down a previous aggregate can fail with status 0 and no tap object. The controller retries for up to 2 s; switching sources takes about 1.5 s.
+
 ## Sleep
 
-While audio is playing, `ssyncd` holds a `PreventUserIdleSystemSleep` power assertion (visible in `pmset -g assertions` as "Speaker Sync is playing"). It releases the assertion on pause, stop, end of track or speaker loss, so the Mac can idle-sleep normally otherwise. Closing the lid or choosing Sleep manually still sleeps the Mac.
+While a file is playing, or an unmuted live source has received audio in the last minute, `ssyncd` holds a `PreventUserIdleSystemSleep` power assertion (visible in `pmset -g assertions` as "Speaker Sync is playing"). It releases the assertion on pause, stop, end of track or speaker loss, so the Mac can idle-sleep normally otherwise. Closing the lid or choosing Sleep manually still sleeps the Mac.
 
 ## Process model
 

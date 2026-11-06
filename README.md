@@ -1,6 +1,6 @@
 # speaker-sync
 
-Play one local audio file through two Bluetooth speakers (JBL Go 4 + JBL Charge 5) from a Mac mini, with per-speaker volume and delay, controlled from iPhone Safari. The Mac decodes and plays everything; the iPhone is only a remote.
+Play a local audio file, or live Mac audio such as Spotify, through two Bluetooth speakers (JBL Go 4 + JBL Charge 5) from a Mac mini, with per-speaker volume and delay, controlled from iPhone Safari. The Mac does all the audio work; the iPhone is only a remote.
 
 ![Light](docs/screenshots/app-light.png) ![Dark](docs/screenshots/app-dark.png)
 
@@ -11,21 +11,24 @@ Play one local audio file through two Bluetooth speakers (JBL Go 4 + JBL Charge 
 - Turning a speaker off stops playback and reports it. Nothing plays from the Mac's own speaker.
 - The service runs with both speakers; Reconnect works after a speaker comes back. The iPhone reaches the service over Wi-Fi.
 - No audible drift over about 9 minutes.
+- Live Spotify audio on both speakers through the command-line tool (`ssync-poc live --app com.spotify.client`).
 
 **Implemented, tested on the Mac only** (non-Bluetooth devices or desktop WebKit)
 - Per-speaker delay (0–2000 ms) and volume, master volume, play/pause/stop/seek, calibration click.
 - Upload and library, saved profiles, restore after restart (always paused).
 - Mobile web UI, token pairing, LAN-only access.
 - Start at login, restart after a crash, keep the Mac awake only while playing.
+- Live sources in the service and UI: **Spotify** or **All Mac audio**, with a level meter and a hint when nothing arrives.
 
 **Depends on your hardware; still to test** (see [docs/TESTING.md](docs/TESTING.md))
 - The web UI on iPhone Safari.
+- Live audio through the installed service. It needs the System Audio Recording permission for SpeakerSync.app.
 - Alignment over 30+ minutes.
 - Whether a saved delay stays right after the speakers reconnect. Bluetooth latency can change on each reconnect.
 
 **Not implemented**
 - Automatic (microphone) calibration, more than two speakers, playlists/queues.
-- Streaming services, system-wide audio capture, TVs and headphones.
+- Streaming-service integration (control Spotify in Spotify itself, or via Spotify Connect), TVs and headphones.
 - HTTPS. A signed or notarised app bundle.
 
 **Not promised:** sample-accurate sync. The app aligns what it sends to each speaker. Each speaker's own Bluetooth and processing delay is unknown and is corrected by ear.
@@ -52,6 +55,9 @@ After changing code, run `scripts/ssync.sh install` again.
 2. **Calibrate:** tap "Play calibration click". With the speakers side by side, delay the speaker you hear **first**: +10 to get close, ±1 to fine-tune, until you hear one click. Mute one speaker to tell which is early.
 3. **Save a profile.**
 4. **Music:** Upload… picks a file from the iPhone (Files app). Tap a track to load it, then Play.
+5. **Spotify / Mac audio:** under Music, tap **Spotify** (or **All Mac audio**), then press Play to unmute the speakers. Start music in Spotify on the Mac, or pick the Mac in Spotify Connect on your phone. Spotify's own output is muted while it plays through the speakers. Play/pause in this UI only mutes the speakers; Spotify keeps playing.
+   - The first time, macOS should ask to allow **SpeakerSync** to record system audio. If the meter stays at "silent" while music plays: System Settings → Privacy & Security → Screen & System Audio Recording → System Audio Recording Only → **+** → `~/Library/Application Support/SpeakerSync/app/SpeakerSync.app`, then tap Reconnect. Reinstalling (a new build) may require allowing it again.
+   - Live audio uses the same speaker delays as files: calibrate once with the click.
 
 Locking the iPhone or closing Safari does not affect playback. When you come back, the page shows the Mac's current state.
 
@@ -66,6 +72,8 @@ Locking the iPhone or closing Safari does not affect playback. When you come bac
 | Red banner "Can't reach the Mac" | The service stopped or the Mac is asleep/offline. Playback on the Mac (if running) is unaffected. The page recovers on its own. |
 | Speakers out of sync after a reconnect | Expected with Bluetooth: re-run the calibration click and adjust. Record it in docs/TESTING.md. |
 | One speaker silent or stuttering | Check `scripts/ssync.sh logs`. Move speakers closer to the Mac; 2.4 GHz Wi-Fi and USB 3 hubs can interfere with Bluetooth. |
+| Spotify selected, meter says "silent" | Is Spotify playing on this Mac (not on the phone)? Then check the System Audio Recording permission (see Use, step 5) and tap Reconnect. |
+| Spotify heard twice / from the Mac too | Shouldn't happen: the tap mutes Spotify's normal output. Tap Reconnect; if it persists, check `scripts/ssync.sh logs`. |
 | Mac sleeps during playback | It shouldn't while playing (`pmset -g assertions` shows "Speaker Sync is playing"). Manual sleep or closing a lid still sleeps it. |
 
 Logs: `~/Library/Logs/SpeakerSync/ssyncd.log`. Settings and music: `~/Library/Application Support/SpeakerSync/`.
@@ -81,7 +89,7 @@ Logs: `~/Library/Logs/SpeakerSync/ssyncd.log`. Settings and music: `~/Library/Ap
 
 | Path | What |
 |---|---|
-| `Sources/AudioEngine` | CoreAudio: device listing, private aggregate device, real-time player, decoding, click track |
+| `Sources/AudioEngine` | CoreAudio: device listing, private aggregate device, file player, live player, process tap, decoding, click track |
 | `Sources/ssyncd` | Service: HTTP API (Hummingbird 2), state, persistence, auth |
 | `Sources/ssync-poc` | Command-line test tool from milestone 1 |
 | `web/` | UI: plain TypeScript (`src/app.ts`) + `public/` → `dist/` |
@@ -92,6 +100,8 @@ Logs: `~/Library/Logs/SpeakerSync/ssyncd.log`. Settings and music: `~/Library/Ap
 
 - Whole files are decoded into memory: about 23 MB per minute at 48 kHz stereo float. That's fine for songs, not for 3-hour mixes.
 - One file at a time; no queue or gapless playback.
+- Live sources have no seek or track info. Use the app (Spotify) for that.
+- Live audio adds a little latency (capture + one I/O cycle), the same for both speakers.
 - Delay changes while playing crossfade over 30 ms. Large jumps briefly repeat or skip audio.
 - The service runs only while you are logged in. That's a requirement for Bluetooth audio, not a bug.
 - The position on the page updates once per second, smoothed locally in between.

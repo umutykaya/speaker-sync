@@ -243,3 +243,12 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 details summary { flex-wrap: wrap; }
 details summary h2 { flex: 1 0 auto; }
 details summary #picker-summary { order: 3; flex-basis: 100%; margin-top: 2px; }
+
+/* Live source */
+.live { display: flex; align-items: center; gap: 10px; min-height: 36px; margin-top: 4px; }
+.live-badge { font-size: 12px; font-weight: 800; letter-spacing: 0.06em; color: #fff; background: var(--err); border-radius: 6px; padding: 2px 7px; }
+.meter { flex: 1; height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; }
+.meter div { height: 100%; width: 0; background: var(--ok); transition: width 0.3s; }
+#live-level { min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
+.hint { background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--text); border-radius: 10px; padding: 10px 12px; }
+.list .tag { font-size: 11px; font-weight: 800; letter-spacing: 0.05em; color: var(--err); margin-left: 6px; }

@@ -11,13 +11,15 @@ All responses are JSON. Every POST/DELETE returns the full state, so the client 
 | `POST /api/seek` | `{"seconds":12.5}` | 0…duration |
 | `POST /api/master` | `{"gain":0.5}` | 0…1 |
 | `POST /api/output` | `{"uid":"…","delayMs":12,"gain":0.8}` | delay 0…2000 ms, gain 0…1, either optional |
-| `POST /api/source` | `{"trackId":"…"}` or `{"trackId":null}` | Track or calibration click; paused at 0 |
+| `POST /api/source` | `{"trackId":"…"}`, `{"trackId":null}` or `{"live":"com.spotify.client"\|"all"}` | Track, calibration click, or live Mac audio; lands paused (live: speakers muted) |
 | `PUT /api/tracks?name=song.mp3` | raw file bytes | Upload; returns the track (201) |
 | `DELETE /api/tracks/{id}` | | Delete file; switches to click if it was playing |
 | `POST /api/profiles` | `{"name":"Living room"}` | Save outputs + delays + gains + master |
 | `POST /api/profiles/{name}/load` | | Apply the profile (devices matched by UID, then name) |
 | `DELETE /api/profiles/{name}` | | |
 | `POST /api/reconnect` | | Rebuild outputs at the current position, paused |
+
+For a live source, `play`/`pause`/`stop` unmute/mute the speakers, `seek` returns 409, `positionSeconds`/`durationSeconds` are 0, and the state adds `inputLevelDb` (peak of the last second, absent when silent) and `liveSilentSeconds` (seconds since audio last arrived, -1 if none yet).
 
 `status` is one of `noOutputs`, `loading`, `playing`, `paused`, `ended`, `error`. On a speaker loss: `error` plus a message, playback stopped, position kept, and nothing reroutes to the Mac speaker.
 

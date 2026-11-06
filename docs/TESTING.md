@@ -21,7 +21,10 @@ Audio, Bluetooth and iPhone behaviour can only be tested by hand on the real har
 | 2026-11-06 | Go 4 switched off during playback (CLI) | Pass: playback stopped, no sound from the Mac speaker |
 | 2026-11-06 | Service with both JBLs, disconnect, Reconnect, iPhone reaching `/api/health` | Pass |
 | 2026-11-06 | LaunchAgent: start, crash restart (`kill -9`), LAN health check | Pass (restarted within 12 s) |
+| 2026-11-06 | Live Spotify via CLI (`ssync-poc live --app com.spotify.client`) on both JBLs | Pass (your test) |
+| 2026-11-06 | Live source API: switch Spotify/all/click repeatedly, mute/unmute, seek rejected | Pass (on the Mac, non-Bluetooth outputs; audio silent there for lack of permission) |
 | 2026-11-06 | Web UI on iPhone Safari | **Pending** |
+| — | Live Spotify through the installed service + permission prompt for SpeakerSync.app | **Pending** |
 | — | 30+ minute drift test | **Pending** |
 | — | Saved delay still aligned after 3 speaker reconnects | **Pending** |
 

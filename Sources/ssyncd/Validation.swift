@@ -54,6 +54,17 @@ enum Validate {
         return (base, ext)
     }
 
+    /// "all", or a reverse-DNS bundle ID such as com.spotify.client.
+    static func liveTarget(_ raw: String) throws -> String {
+        if raw == "all" { return raw }
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: ".-"))
+        guard (3...100).contains(raw.count), raw.contains("."), !raw.hasPrefix("."), !raw.hasSuffix("."),
+              raw.unicodeScalars.allSatisfy({ $0.isASCII && allowed.contains($0) }) else {
+            throw APIError.bad("live must be \"all\" or an app bundle ID like com.spotify.client")
+        }
+        return raw
+    }
+
     static func profileName(_ raw: String) throws -> String {
         let name = raw.trimmingCharacters(in: .whitespaces)
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: " -_."))

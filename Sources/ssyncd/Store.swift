@@ -24,6 +24,8 @@ struct Config: Codable, Sendable {
     var profiles: [Profile] = []
     /// nil means the calibration click track.
     var currentTrackID: String?
+    /// Live Mac audio instead of a file: "all" or an app bundle ID. Takes precedence over currentTrackID.
+    var liveTarget: String?
 }
 
 struct Track: Codable, Sendable {

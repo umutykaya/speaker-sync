@@ -14,6 +14,8 @@ LABEL=local.speakersync.ssyncd
 DOMAIN=gui/$(id -u)
 SUPPORT="$HOME/Library/Application Support/SpeakerSync"
 APP="$SUPPORT/app"
+BUNDLE="$APP/SpeakerSync.app"
+BIN="$BUNDLE/Contents/MacOS/ssyncd"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 LOGDIR="$HOME/Library/Logs/SpeakerSync"
 LOG="$LOGDIR/ssyncd.log"
@@ -48,9 +50,31 @@ install() {
 
   echo "==> installing to $APP"
   mkdir -p "$APP" "$LOGDIR" "$HOME/Library/LaunchAgents"
-  rm -rf "$APP/web"
+  rm -rf "$APP/web" "$APP/ssyncd"
   cp -R "$ROOT/web/dist" "$APP/web"
-  cp "$ROOT/.build/release/ssyncd" "$APP/ssyncd.new" && mv -f "$APP/ssyncd.new" "$APP/ssyncd"
+  # A minimal app bundle: macOS ties the System Audio Recording permission
+  # (needed for live Spotify / Mac audio) to a bundle identity.
+  mkdir -p "$BUNDLE/Contents/MacOS"
+  cp "$ROOT/.build/release/ssyncd" "$BIN.new" && mv -f "$BIN.new" "$BIN"
+  cat > "$BUNDLE/Contents/Info.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key><string>$LABEL</string>
+  <key>CFBundleName</key><string>SpeakerSync</string>
+  <key>CFBundleExecutable</key><string>ssyncd</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>1.0</string>
+  <key>LSUIElement</key><true/>
+  <key>NSAudioCaptureUsageDescription</key><string>SpeakerSync plays your Mac's audio (for example Spotify) on your Bluetooth speakers.</string>
+</dict>
+</plist>
+EOF
+  plutil -lint "$BUNDLE/Contents/Info.plist" >/dev/null
+  # Ad-hoc signature gives the bundle an identity. A rebuild changes it, so
+  # macOS may ask for the audio permission again after reinstalling.
+  codesign --force --sign - --identifier "$LABEL" "$BUNDLE"
 
   cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -58,7 +82,7 @@ install() {
 <plist version="1.0">
 <dict>
   <key>Label</key><string>$LABEL</string>
-  <key>ProgramArguments</key><array><string>$APP/ssyncd</string></array>
+  <key>ProgramArguments</key><array><string>$BIN</string></array>
   <key>EnvironmentVariables</key><dict><key>SSYNC_WEB</key><string>$APP/web</string></dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -76,8 +100,13 @@ EOF
   cat <<EOF
 
 Firewall: the installed binary is a new path. If the iPhone cannot connect, allow it (asks for your password):
-  sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add "$APP/ssyncd"
-  sudo /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp "$APP/ssyncd"
+  sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add "$BIN"
+  sudo /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp "$BIN"
+
+Live audio (Spotify / all Mac audio): the first time you pick a live source, macOS should ask
+to allow SpeakerSync to record system audio. If it doesn't, or the source stays silent:
+  System Settings → Privacy & Security → Screen & System Audio Recording →
+  System Audio Recording Only → + → choose $BUNDLE
 EOF
 }
 
@@ -115,6 +144,6 @@ case "${1:-}" in
   link) link ;;
   logs) tail -f "$LOG" ;;
   restart) launchctl kickstart -k "$DOMAIN/$LABEL" && sleep 2 && status ;;
-  rotate-token) "$APP/ssyncd" --rotate-token && launchctl kickstart -k "$DOMAIN/$LABEL" && sleep 2 && link ;;
+  rotate-token) "$BIN" --rotate-token && launchctl kickstart -k "$DOMAIN/$LABEL" && sleep 2 && link ;;
   *) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

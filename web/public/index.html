@@ -42,8 +42,16 @@
         <span id="status" class="pill">—</span>
       </div>
       <p id="source-name" class="source-name">—</p>
-      <input id="seek" class="slider" type="range" min="0" max="1" step="0.1" value="0" aria-label="Position">
-      <div class="row between times"><span id="elapsed">0:00</span><span id="duration">0:00</span></div>
+      <div id="seek-wrap">
+        <input id="seek" class="slider" type="range" min="0" max="1" step="0.1" value="0" aria-label="Position">
+        <div class="row between times"><span id="elapsed">0:00</span><span id="duration">0:00</span></div>
+      </div>
+      <div id="live" class="live" hidden>
+        <span class="live-badge">LIVE</span>
+        <div class="meter" role="meter" aria-label="Input level" aria-valuemin="-60" aria-valuemax="0"><div id="meter-bar"></div></div>
+        <span id="live-level" class="muted small">—</span>
+      </div>
+      <p id="live-hint" class="hint small" hidden></p>
       <div class="transport">
         <button id="btn-stop" class="round" type="button" aria-label="Stop">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
@@ -88,7 +96,7 @@
       </div>
       <div id="upload-progress" class="progress" hidden><div id="upload-bar"></div><span id="upload-text"></span></div>
       <ul id="tracks" class="list"></ul>
-      <p class="muted small">Files are stored on the Mac until you delete them (max 500 MB each, 5 GB total).</p>
+      <p class="muted small">Live sources play whatever that app plays on the Mac; control it in the app itself (or Spotify Connect from your phone). Files are stored on the Mac until you delete them (max 500 MB each, 5 GB total).</p>
     </section>
 
     <!-- Profiles -->

@@ -59,6 +59,15 @@ import Testing
         #expect(matchOutputs(saved, present: present)[0].kind == .missing)
     }
 
+    @Test func liveTargets() throws {
+        #expect(try Validate.liveTarget("all") == "all")
+        #expect(try Validate.liveTarget("com.spotify.client") == "com.spotify.client")
+        #expect(throws: APIError.self) { try Validate.liveTarget("spotify") }
+        #expect(throws: APIError.self) { try Validate.liveTarget("com.spotify/../x") }
+        #expect(throws: APIError.self) { try Validate.liveTarget(".com") }
+        #expect(throws: APIError.self) { try Validate.liveTarget("") }
+    }
+
     @Test func tokenCompare() {
         #expect(tokensEqual("abc", "abc"))
         #expect(!tokensEqual("abc", "abd"))

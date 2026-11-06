@@ -72,7 +72,7 @@ struct TransportBody: Decodable { let action: String }
 struct SeekBody: Decodable { let seconds: Double }
 struct GainBody: Decodable { let gain: Double }
 struct OutputBody: Decodable { let uid: String; let delayMs: Double?; let gain: Double? }
-struct SourceBody: Decodable { let trackId: String? }
+struct SourceBody: Decodable { let trackId: String?; let live: String? }
 struct ProfileBody: Decodable { let name: String }
 
 func buildRouter(controller: Controller, store: Store, token: String, webRoot: String?) -> Router<AppContext> {
@@ -121,7 +121,11 @@ func buildRouter(controller: Controller, store: Store, token: String, webRoot: S
     }
     api.post("source") { req, ctx in
         let b = try await req.decode(as: SourceBody.self, context: ctx)
-        try await controller.setSource(trackID: b.trackId)
+        if let live = b.live {
+            try await controller.setLiveSource(live)
+        } else {
+            try await controller.setSource(trackID: b.trackId)
+        }
         return try json(await controller.state())
     }
     api.post("reconnect") { _, _ in
