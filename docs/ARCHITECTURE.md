@@ -74,3 +74,10 @@ While a file is playing, or an unmuted live source has received audio in the las
 ## Process model
 
 `ssyncd` runs as a per-user LaunchAgent (`~/Library/LaunchAgents/local.speakersync.ssyncd.plist`), not a system daemon. Bluetooth audio devices belong to the logged-in user's session, so the service only runs while you are logged in. With FileVault on, the Mac must be unlocked once after boot.
+
+`main` hands the main thread to `NSApplication.run()` (activation policy
+`.accessory`, plus `LSUIElement` in the bundle, so no Dock icon) for the menu
+bar item (`MenuBar.swift`). The AppKit run loop drains the main queue, so the
+`@MainActor` controller, its timers and the Hummingbird server task run as
+before. The menu reads `Controller.state()` and calls the same methods as the
+HTTP API.

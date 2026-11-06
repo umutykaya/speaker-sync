@@ -65,6 +65,14 @@ After changing code, run `scripts/ssync.sh install` again.
 
 Locking the iPhone or closing Safari does not affect playback. When you come back, the page shows the Mac's current state.
 
+**Menu bar:** a speaker icon in the Mac's menu bar shows the state at a glance:
+filled speakers = playing, outline = speakers connected, ⚠ = a selected speaker
+is not connected, crossed-out speaker = no speakers selected. Its menu lists
+each speaker (✓ connected / ✗ not connected) and has Play/Pause, Stop,
+Reconnect speakers, Open Speaker Sync (opens the web UI on the Mac, already
+paired) and Copy iPhone pairing link. There is no Quit: the LaunchAgent would
+restart it; use `scripts/ssync.sh stop`.
+
 ## Troubleshooting
 
 | Symptom | Check |

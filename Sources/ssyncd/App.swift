@@ -1,19 +1,43 @@
+import AppKit
 import Foundation
 import Hummingbird
 
 @main
 struct SSyncD {
-    static func main() async throws {
+    /// AppKit owns the main thread (for the menu bar icon); its run loop also
+    /// drains the main queue, so @MainActor work and the server task keep running.
+    static func main() {
         setvbuf(stdout, nil, _IOLBF, 0)
-        let store = try Store()
         if CommandLine.arguments.contains("--rotate-token") {
-            var config = try store.loadConfig()
-            config.token = Store.newToken()
-            try store.saveConfig(config)
-            print("token rotated; old pairing links no longer work. Restart the service to apply.")
+            do {
+                let store = try Store()
+                var config = try store.loadConfig()
+                config.token = Store.newToken()
+                try store.saveConfig(config)
+                print("token rotated; old pairing links no longer work. Restart the service to apply.")
+            } catch {
+                print("[ssyncd] \(error)")
+                exit(1)
+            }
             return
         }
-        let controller = try await MainActor.run { try Controller(store: store) }
+        let app = NSApplication.shared
+        app.setActivationPolicy(.accessory)  // menu bar only, no Dock icon
+        Task { @MainActor in
+            do {
+                try await serve()
+            } catch {
+                print("[ssyncd] fatal: \(error)")
+            }
+            exit(1)  // the LaunchAgent restarts it
+        }
+        app.run()
+    }
+
+    @MainActor
+    static func serve() async throws {
+        let store = try Store()
+        let controller = try Controller(store: store)
         let token = controller.config.token
 
         let env = ProcessInfo.processInfo.environment
@@ -22,6 +46,7 @@ struct SSyncD {
 
         // Restore saved outputs, paused. Never auto-plays after a restart.
         await controller.rebuild()
+        let menuBar = MenuBar(controller: controller, port: port)
 
         let webRoot = findWebRoot()
         print("[ssyncd] settings: \(store.root.path)")
@@ -35,6 +60,7 @@ struct SSyncD {
             configuration: .init(address: .hostname(host, port: port), serverName: "ssyncd")
         )
         try await app.runService()
+        withExtendedLifetime(menuBar) {}
     }
 }
 
