@@ -48,7 +48,7 @@ scripts/ssync.sh link        # pairing link to open on the iPhone
 
 Open the pairing link in Safari on the iPhone, on the same Wi-Fi. Optionally use Share → Add to Home Screen. If macOS asks whether `ssyncd` may accept incoming connections, choose **Allow**.
 
-Other commands: `scripts/ssync.sh status | logs | restart | rotate-token | uninstall`. Uninstall keeps your settings and music.
+Other commands: `scripts/ssync.sh status | logs | restart | start | stop | rotate-token | uninstall`. `stop` keeps it installed; it starts again with `start` or at the next login. Uninstall keeps your settings and music.
 
 After changing code, run `scripts/ssync.sh install` again.
 

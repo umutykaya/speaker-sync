@@ -6,6 +6,8 @@
 #   scripts/ssync.sh link       print the pairing link
 #   scripts/ssync.sh logs       follow the log
 #   scripts/ssync.sh restart    restart the running agent
+#   scripts/ssync.sh start      load the installed agent again after stop
+#   scripts/ssync.sh stop       stop the agent until start or next login (keeps it installed)
 #   scripts/ssync.sh rotate-token  new pairing token (old links stop working)
 set -euo pipefail
 
@@ -144,6 +146,11 @@ case "${1:-}" in
   link) link ;;
   logs) tail -f "$LOG" ;;
   restart) launchctl kickstart -k "$DOMAIN/$LABEL" && sleep 2 && status ;;
+  start)
+    [[ -f "$PLIST" ]] || { echo "not installed (run: scripts/ssync.sh install)" >&2; exit 1; }
+    loaded || launchctl bootstrap "$DOMAIN" "$PLIST"
+    sleep 2 && status ;;
+  stop) if loaded; then launchctl bootout "$DOMAIN/$LABEL"; fi; echo "agent stopped" ;;
   rotate-token) "$BIN" --rotate-token && launchctl kickstart -k "$DOMAIN/$LABEL" && sleep 2 && link ;;
-  *) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
