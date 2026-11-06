@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Speaker Sync">
+  <meta name="color-scheme" content="light dark">
+  <title>Speaker Sync</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <!-- Pairing: shown when no token is stored -->
+  <main id="pair" class="screen" hidden>
+    <h1>Speaker Sync</h1>
+    <p class="muted">Open the pairing link that <code>ssyncd</code> printed on the Mac, or paste the token here.</p>
+    <form id="pair-form" class="card">
+      <label for="pair-token">Token</label>
+      <input id="pair-token" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text" placeholder="32 hex characters">
+      <button class="primary" type="submit">Pair</button>
+    </form>
+  </main>
+
+  <main id="app" class="screen" hidden>
+    <header class="topbar">
+      <h1>Speaker Sync</h1>
+      <span id="conn" class="pill" data-kind="ok">Connected</span>
+    </header>
+
+    <section id="banner" class="banner" hidden>
+      <p id="banner-text"></p>
+      <button id="banner-action" class="secondary" type="button">Reconnect</button>
+    </section>
+    <ul id="notices" class="notices"></ul>
+
+    <!-- Now playing -->
+    <section class="card" aria-labelledby="np-title">
+      <div class="row between">
+        <h2 id="np-title">Now playing</h2>
+        <span id="status" class="pill">—</span>
+      </div>
+      <p id="source-name" class="source-name">—</p>
+      <input id="seek" class="slider" type="range" min="0" max="1" step="0.1" value="0" aria-label="Position">
+      <div class="row between times"><span id="elapsed">0:00</span><span id="duration">0:00</span></div>
+      <div class="transport">
+        <button id="btn-stop" class="round" type="button" aria-label="Stop">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+        </button>
+        <button id="btn-play" class="round big" type="button" aria-label="Play">
+          <svg id="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
+          <svg id="icon-pause" viewBox="0 0 24 24" aria-hidden="true" hidden><rect x="6.5" y="5" width="4" height="14" rx="1"/><rect x="13.5" y="5" width="4" height="14" rx="1"/></svg>
+        </button>
+        <span class="round spacer" aria-hidden="true"></span>
+      </div>
+      <label class="slider-label" for="master">Master volume <output id="master-val">—</output></label>
+      <input id="master" class="slider" type="range" min="0" max="100" step="1" value="50">
+    </section>
+
+    <!-- Speakers: per-output gain + delay -->
+    <section class="card" aria-labelledby="sp-title">
+      <h2 id="sp-title">Speakers</h2>
+      <p class="muted small">Delay the speaker you hear <em>first</em>. Use the calibration click below.</p>
+      <div id="outputs"></div>
+      <p id="outputs-empty" class="muted" hidden>No speakers selected. Choose them under “Outputs”.</p>
+    </section>
+
+    <!-- Calibration -->
+    <section class="card" aria-labelledby="cal-title">
+      <h2 id="cal-title">Calibrate by ear</h2>
+      <ol class="steps small">
+        <li>Place both speakers side by side, about 1 m away. Sit centered.</li>
+        <li>Play the click. A double click means one speaker is early.</li>
+        <li>Mute one speaker at a time to find the early one.</li>
+        <li>Add delay to the early one with +10, then fine-tune with ±1 until you hear one click.</li>
+        <li>Save a profile.</li>
+      </ol>
+      <button id="btn-click" class="secondary wide" type="button">Play calibration click</button>
+    </section>
+
+    <!-- Library -->
+    <section class="card" aria-labelledby="lib-title">
+      <div class="row between">
+        <h2 id="lib-title">Music</h2>
+        <label class="secondary small-btn" for="upload">Upload…</label>
+        <input id="upload" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.aif,.aiff,.caf,.flac" hidden>
+      </div>
+      <div id="upload-progress" class="progress" hidden><div id="upload-bar"></div><span id="upload-text"></span></div>
+      <ul id="tracks" class="list"></ul>
+      <p class="muted small">Files are stored on the Mac until you delete them (max 500 MB each, 5 GB total).</p>
+    </section>
+
+    <!-- Profiles -->
+    <section class="card" aria-labelledby="pr-title">
+      <h2 id="pr-title">Profiles</h2>
+      <form id="profile-form" class="row gap">
+        <input id="profile-name" maxlength="40" placeholder="Profile name" autocomplete="off" aria-label="Profile name">
+        <button class="secondary" type="submit">Save</button>
+      </form>
+      <ul id="profiles" class="list"></ul>
+    </section>
+
+    <!-- Output selection -->
+    <details id="outputs-picker" class="card">
+      <summary><h2>Outputs</h2><span id="picker-summary" class="muted small"></span></summary>
+      <p class="muted small">Pick up to two. The first one picked is the clock; the second is drift-corrected to follow it.</p>
+      <ul id="devices" class="list"></ul>
+      <button id="btn-apply-outputs" class="primary wide" type="button">Use selected outputs</button>
+    </details>
+
+    <footer class="footer muted small">
+      <span id="updated">—</span>
+      <button id="btn-unpair" class="link" type="button">Unpair this device</button>
+    </footer>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

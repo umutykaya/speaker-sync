@@ -1,0 +1,12 @@
+{
+  "name": "speaker-sync-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc && cp public/* dist/",
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}
