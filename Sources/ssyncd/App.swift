@@ -2,6 +2,10 @@ import AppKit
 import Foundation
 import Hummingbird
 
+/// Started by the LaunchAgent from scripts/ssync.sh (which restarts it), rather
+/// than as SpeakerSync.app opened from /Applications (the DMG install).
+let underLaunchAgent = ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"] == "local.speakersync.ssyncd"
+
 @main
 struct SSyncD {
     /// AppKit owns the main thread (for the menu bar icon); its run loop also
@@ -21,6 +25,15 @@ struct SSyncD {
             }
             return
         }
+        let port = Int(ProcessInfo.processInfo.environment["SSYNC_PORT"] ?? "") ?? 8095
+        if !underLaunchAgent {
+            // Opened again while already running: show the UI instead of a second copy.
+            if serverRunning(port: port) {
+                NSWorkspace.shared.open(URL(string: "http://localhost:\(port)/")!)
+                return
+            }
+            logToFile()
+        }
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)  // menu bar only, no Dock icon
         Task { @MainActor in
@@ -28,15 +41,48 @@ struct SSyncD {
                 try await serve()
             } catch {
                 print("[ssyncd] fatal: \(error)")
+                if !underLaunchAgent { alert("Speaker Sync could not start", "\(error)") }
             }
             exit(1)  // the LaunchAgent restarts it
         }
         app.run()
     }
 
+    /// The app has no terminal: write output where `scripts/ssync.sh logs` looks.
+    static func logToFile() {
+        let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/SpeakerSync")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let path = dir.appendingPathComponent("ssyncd.log").path
+        freopen(path, "a", stdout)
+        freopen(path, "a", stderr)
+        setvbuf(stdout, nil, _IOLBF, 0)
+    }
+
+    static func serverRunning(port: Int) -> Bool {
+        let done = DispatchSemaphore(value: 0)
+        nonisolated(unsafe) var ok = false
+        var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/api/health")!)
+        request.timeoutInterval = 2
+        URLSession.shared.dataTask(with: request) { data, _, _ in
+            ok = data.map { String(decoding: $0, as: UTF8.self).contains("\"ok\":true") } ?? false
+            done.signal()
+        }.resume()
+        done.wait()
+        return ok
+    }
+
+    @MainActor
+    static func alert(_ title: String, _ text: String) {
+        let a = NSAlert()
+        a.messageText = title
+        a.informativeText = text
+        a.runModal()
+    }
+
     @MainActor
     static func serve() async throws {
         let store = try Store()
+        let firstRun = !FileManager.default.fileExists(atPath: store.root.appendingPathComponent("config.json").path)
         let controller = try Controller(store: store)
         let token = controller.config.token
 
@@ -47,6 +93,9 @@ struct SSyncD {
         // Restore saved outputs, paused. Never auto-plays after a restart.
         await controller.rebuild()
         let menuBar = MenuBar(controller: controller, port: port)
+        if firstRun && !underLaunchAgent {
+            menuBar.firstRun()
+        }
 
         let webRoot = findWebRoot()
         print("[ssyncd] settings: \(store.root.path)")
@@ -84,12 +133,14 @@ func lanAddresses() -> [String] {
     return result
 }
 
-/// The built web UI: $SSYNC_WEB, else web/dist found by walking up from the
-/// executable (works for .build/release/ssyncd), else ./web/dist.
+/// The built web UI: $SSYNC_WEB, else Contents/Resources/web inside the app
+/// bundle, else web/dist found by walking up from the executable (works for
+/// .build/release/ssyncd), else ./web/dist.
 func findWebRoot() -> String? {
     let fm = FileManager.default
     let has = { (dir: String) in fm.fileExists(atPath: (dir as NSString).appendingPathComponent("index.html")) }
     if let env = ProcessInfo.processInfo.environment["SSYNC_WEB"], !env.isEmpty { return has(env) ? env : nil }
+    if let bundled = Bundle.main.resourceURL?.appendingPathComponent("web").path, has(bundled) { return bundled }
     var dir = Bundle.main.executableURL?.resolvingSymlinksInPath().deletingLastPathComponent()
     for _ in 0..<5 {
         guard let d = dir else { break }

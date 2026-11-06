@@ -244,10 +244,11 @@ final class Controller {
 
     // MARK: levels and delays
 
-    func setMaster(_ g: Double) throws {
+    /// `persist: false` while a slider is still moving; save on release.
+    func setMaster(_ g: Double, persist: Bool = true) throws {
         config.master = try Validate.gain(g)
         engine?.output.setMaster(Float(config.master))
-        try save()
+        if persist { try save() }
     }
 
     func setOutput(uid: String, delayMs: Double?, gain: Double?, limitEnabled: Bool? = nil, limitDb: Double? = nil) throws {

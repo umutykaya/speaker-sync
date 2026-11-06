@@ -38,6 +38,19 @@ Play a local audio file, or live Mac audio such as Spotify, through two Bluetoot
 
 ## Install
 
+### From the DMG (any Mac with macOS 15+, Apple silicon or Intel)
+
+1. Download `SpeakerSync-<version>.dmg` from [Releases](https://github.com/umutykaya/speaker-sync/releases) and drag **SpeakerSync** onto Applications.
+2. Open it. The app is not notarized (no paid Apple Developer ID), so macOS blocks the first open: System Settings → Privacy & Security → scroll down → **Open Anyway** next to SpeakerSync → confirm.
+3. The web page opens and a speaker icon appears in the menu bar. Pick your speakers under Outputs. Menu bar icon → **Copy iPhone pairing link** for the phone.
+4. It starts at login (menu bar → **Open at Login** to change). Allow incoming connections and System Audio Recording when macOS asks.
+
+Don't use both the DMG app and `scripts/ssync.sh install` on the same Mac: they share port 8095 and settings. To remove the app: menu bar → Quit, turn off Open at Login, delete it from Applications. Settings stay in `~/Library/Application Support/SpeakerSync`.
+
+Build a DMG yourself: `scripts/package.sh <version>` → `dist/SpeakerSync-<version>.dmg` (universal binary, ad-hoc signed).
+
+### From source (LaunchAgent)
+
 Requirements: macOS with Xcode command-line tools (Swift 6), Node.js (only to build the UI), both speakers paired and connected in System Settings → Bluetooth. Turn off PartyBoost/Auracast linking.
 
 ```sh
@@ -68,9 +81,11 @@ Locking the iPhone or closing Safari does not affect playback. When you come bac
 **Menu bar:** a speaker icon in the Mac's menu bar shows the state at a glance:
 filled speakers = playing, outline = speakers connected, ⚠ = a selected speaker
 is not connected, crossed-out speaker = no speakers selected. Its menu lists
-each speaker (✓ connected / ✗ not connected) and has Play/Pause, Stop,
+each speaker (✓ connected / ✗ not connected), a master volume slider (same as
+the web UI), and Play/Pause, Stop,
 Reconnect speakers, Open Speaker Sync (opens the web UI on the Mac, already
-paired) and Copy iPhone pairing link. There is no Quit: the LaunchAgent would
+paired) and Copy iPhone pairing link. The DMG app also has Open at Login and Quit.
+Installed with `scripts/ssync.sh` there is no Quit: the LaunchAgent would
 restart it; use `scripts/ssync.sh stop`.
 
 ## Troubleshooting

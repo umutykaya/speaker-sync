@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 
 /// Speaker icon in the macOS menu bar: shows whether the speakers are
 /// connected and playing, and offers the common actions. The web UI stays the
@@ -10,6 +11,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
     private let port: Int
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private var timer: Timer?
+    private var masterLabel: NSTextField?
 
     init(controller: Controller, port: Int) {
         self.controller = controller
@@ -24,6 +26,19 @@ final class MenuBar: NSObject, NSMenuDelegate {
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshIcon() }
         }
+    }
+
+    /// SpeakerSync.app opened by the user (DMG install), not the LaunchAgent:
+    /// it manages its own login item and can quit.
+    private var standaloneApp: Bool {
+        !underLaunchAgent && Bundle.main.bundleURL.pathExtension == "app"
+    }
+
+    /// First launch of the app: start at login from now on, and show the UI
+    /// so there is something to pick speakers in.
+    func firstRun() {
+        if standaloneApp { try? SMAppService.mainApp.register() }
+        openUI()
     }
 
     private enum Look { case playing, ready, missing, off }
@@ -76,6 +91,8 @@ final class MenuBar: NSObject, NSMenuDelegate {
                 menu.addItem(row)
             }
             menu.addItem(.separator())
+            menu.addItem(masterSlider(s.master))
+            menu.addItem(.separator())
             let playing = s.status == "playing"
             menu.addItem(action(playing ? "Pause" : "Play", #selector(togglePlay), enabled: s.status != "loading"))
             menu.addItem(action("Stop", #selector(stop), enabled: s.status == "playing" || s.status == "paused"))
@@ -85,6 +102,39 @@ final class MenuBar: NSObject, NSMenuDelegate {
         menu.addItem(.separator())
         menu.addItem(action("Open Speaker Sync", #selector(openUI)))
         menu.addItem(action("Copy iPhone pairing link", #selector(copyLink), enabled: !lanAddresses().isEmpty))
+        if standaloneApp {
+            menu.addItem(.separator())
+            let login = action("Open at Login", #selector(toggleLogin))
+            login.state = SMAppService.mainApp.status == .enabled ? .on : .off
+            menu.addItem(login)
+            menu.addItem(action("Quit Speaker Sync", #selector(quit)))
+        }
+    }
+
+    /// Same master volume as the web UI (0–100 %), live while dragging.
+    private func masterSlider(_ value: Double) -> NSMenuItem {
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: 250, height: 46))
+        let label = NSTextField(labelWithString: "Master volume \(Int((value * 100).rounded())) %")
+        label.font = .menuFont(ofSize: 0)
+        label.textColor = .secondaryLabelColor
+        label.frame = NSRect(x: 20, y: 24, width: 210, height: 18)
+        let slider = NSSlider(value: value * 100, minValue: 0, maxValue: 100, target: self, action: #selector(masterChanged(_:)))
+        slider.isContinuous = true
+        slider.frame = NSRect(x: 18, y: 2, width: 214, height: 22)
+        slider.setAccessibilityLabel("Master volume")
+        view.addSubview(label)
+        view.addSubview(slider)
+        masterLabel = label
+        let row = NSMenuItem()
+        row.view = view
+        return row
+    }
+
+    @objc private func masterChanged(_ slider: NSSlider) {
+        // Save unless mid-drag (release, click, keyboard and scroll all save).
+        let dragging = NSApp.currentEvent?.type == .leftMouseDragged
+        try? controller.setMaster(slider.doubleValue / 100, persist: !dragging)
+        masterLabel?.stringValue = "Master volume \(Int(slider.doubleValue.rounded())) %"
     }
 
     private func info(_ title: String, bold: Bool = false) -> NSMenuItem {
@@ -122,6 +172,19 @@ final class MenuBar: NSObject, NSMenuDelegate {
         if let url = URL(string: "http://localhost:\(port)/#token=\(controller.config.token)") {
             NSWorkspace.shared.open(url)
         }
+    }
+
+    @objc private func toggleLogin() {
+        let service = SMAppService.mainApp
+        do {
+            if service.status == .enabled { try service.unregister() } else { try service.register() }
+        } catch {
+            SSyncD.alert("Could not change Open at Login", "\(error.localizedDescription)\n\nYou can set it in System Settings → General → Login Items.")
+        }
+    }
+
+    @objc private func quit() {
+        NSApp.terminate(nil)
     }
 
     @objc private func copyLink() {
