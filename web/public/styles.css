@@ -252,3 +252,9 @@ details summary #picker-summary { order: 3; flex-basis: 100%; margin-top: 2px; }
 #live-level { min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
 .hint { background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--text); border-radius: 10px; padding: 10px 12px; }
 .list .tag { font-size: 11px; font-weight: 800; letter-spacing: 0.05em; color: var(--err); margin-left: 6px; }
+
+/* Per-speaker level limiter */
+.limit { margin-top: 10px; }
+.limit-head { display: flex; align-items: center; gap: 10px; min-height: 40px; font-size: 15px; font-weight: 500; }
+.limiting { font-size: 12px; font-weight: 700; color: var(--warn); background: color-mix(in srgb, var(--warn) 16%, transparent); border-radius: 999px; padding: 2px 8px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.limit-help { margin: 2px 0 0; }

@@ -19,15 +19,18 @@ Play a local audio file, or live Mac audio such as Spotify, through two Bluetoot
 - Mobile web UI, token pairing, LAN-only access.
 - Start at login, restart after a crash, keep the Mac awake only while playing.
 - Live sources in the service and UI: **Spotify** or **All Mac audio**, with a level meter and a hint when nothing arrives.
+- Up to 8 outputs at once (e.g. Charge 5 + Go 4 + HP monitor + Mac mini speaker), each with its own volume, delay and optional limiter.
+- Optional per-speaker **level limiter**: a dB ceiling that turns down loud peaks on that speaker only, with a live "limiting −N dB" readout.
 
 **Depends on your hardware; still to test** (see [docs/TESTING.md](docs/TESTING.md))
 - The web UI on iPhone Safari.
 - Live audio through the installed service. It needs the System Audio Recording permission for SpeakerSync.app.
 - Alignment over 30+ minutes.
 - Whether a saved delay stays right after the speakers reconnect. Bluetooth latency can change on each reconnect.
+- Mixing Bluetooth (44.1 kHz) and wired (48 kHz) outputs in one group: the shared clock must run them all at one rate.
 
 **Not implemented**
-- Automatic (microphone) calibration, more than two speakers, playlists/queues.
+- Automatic (microphone) calibration, playlists/queues.
 - Streaming-service integration (control Spotify in Spotify itself, or via Spotify Connect), TVs and headphones.
 - HTTPS. A signed or notarised app bundle.
 
@@ -51,11 +54,12 @@ After changing code, run `scripts/ssync.sh install` again.
 
 ## Use
 
-1. **Outputs:** tick the Charge 5 first (it becomes the clock), then the Go 4. Tap "Use selected outputs".
+1. **Outputs:** tick the speakers you want, up to 8; the first one ticked becomes the clock. Tap "Use selected outputs". Wired outputs (Mac speaker, USB monitor) play much earlier than Bluetooth, so they need the larger delay.
 2. **Calibrate:** tap "Play calibration click". With the speakers side by side, delay the speaker you hear **first**: +10 to get close, ±1 to fine-tune, until you hear one click. Mute one speaker to tell which is early.
-3. **Save a profile.**
-4. **Music:** Upload… picks a file from the iPhone (Files app). Tap a track to load it, then Play.
-5. **Spotify / Mac audio:** under Music, tap **Spotify** (or **All Mac audio**), then press Play to unmute the speakers. Start music in Spotify on the Mac, or pick the Mac in Spotify Connect on your phone. Spotify's own output is muted while it plays through the speakers. Play/pause in this UI only mutes the speakers; Spotify keeps playing.
+3. **Optional, Limit level:** turn it on for a speaker that drowns out the others, and set its ceiling (−40…0 dB). Loud peaks on that speaker are held under the ceiling; quieter parts and the other speakers are unchanged. The ceiling applies to the signal sent to that speaker, not the room loudness: the speaker's own volume buttons still matter.
+4. **Save a profile.** It includes delays, volumes and limiter settings.
+5. **Music:** Upload… picks a file from the iPhone (Files app). Tap a track to load it, then Play.
+6. **Spotify / Mac audio:** under Music, tap **Spotify** (or **All Mac audio**), then press Play to unmute the speakers. Start music in Spotify on the Mac, or pick the Mac in Spotify Connect on your phone. Spotify's own output is muted while it plays through the speakers. Play/pause in this UI only mutes the speakers; Spotify keeps playing.
    - The first time, macOS should ask to allow **SpeakerSync** to record system audio. If the meter stays at "silent" while music plays: System Settings → Privacy & Security → Screen & System Audio Recording → System Audio Recording Only → **+** → `~/Library/Application Support/SpeakerSync/app/SpeakerSync.app`, then tap Reconnect. Reinstalling (a new build) may require allowing it again.
    - Live audio uses the same speaker delays as files: calibrate once with the click.
 

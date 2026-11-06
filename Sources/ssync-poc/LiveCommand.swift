@@ -25,7 +25,7 @@ func runLive(_ args: [String]) -> Never {
         }
         i += 1
     }
-    guard (1...LivePlayer.maxOutputs).contains(outUIDs.count), Set(outUIDs).count == outUIDs.count else {
+    guard (1...2).contains(outUIDs.count), Set(outUIDs).count == outUIDs.count else {
         fail("pass one or two distinct --out UIDs (see `ssync-poc list`)")
     }
     guard delays.allSatisfy({ (0...2000).contains($0) }), (0...1).contains(master) else { fail("delays 0...2000 ms, master 0...1") }

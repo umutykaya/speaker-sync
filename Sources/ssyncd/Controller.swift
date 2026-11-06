@@ -13,6 +13,8 @@ protocol OutputEngine: AnyObject {
     func setDelay(output: Int, ms: Double)
     func setGain(output: Int, _ g: Float)
     func setMaster(_ g: Float)
+    func setLimiter(output: Int, ceilingDb: Double?)
+    func takeLimiterReductionDb(output: Int) -> Float
     func start() throws
     func stop()
 }
@@ -30,6 +32,10 @@ final class Controller {
         let delayMs: Double
         let gain: Double
         let matchedBy: MatchKind
+        let limitEnabled: Bool
+        let limitDb: Double
+        /// Deepest gain reduction in the last second (dB, < 0), nil when not limiting.
+        let limitingDb: Double?
     }
     struct DeviceState: Codable, Sendable {
         let uid: String
@@ -93,6 +99,7 @@ final class Controller {
     private var cachedSource: (key: String, source: Source)?
     private var sleepAssertion: IOPMAssertionID = 0
     private var lastInputPeak: Float = 0
+    private var limiting: [String: Double] = [:]
     private var lastAudioAt: Date?
     private var housekeeping: DispatchSourceTimer?
 
@@ -110,6 +117,13 @@ final class Controller {
     }
 
     private func tick() {
+        limiting = [:]
+        if let out = engine?.output {
+            for (i, o) in config.outputs.enumerated() where i < out.outputs.count {
+                let db = out.takeLimiterReductionDb(output: i)
+                if db < -0.1 { limiting[o.uid] = Double(db) }
+            }
+        }
         if let live = engine?.live {
             lastInputPeak = live.takeInputPeak()
             if lastInputPeak > 0.001 { lastAudioAt = Date() }
@@ -176,7 +190,8 @@ final class Controller {
             source: source,
             master: config.master,
             outputs: config.outputs.map {
-                OutputState(uid: $0.uid, name: $0.name, delayMs: $0.delayMs, gain: $0.gain, matchedBy: matchKinds[$0.uid] ?? .missing)
+                OutputState(uid: $0.uid, name: $0.name, delayMs: $0.delayMs, gain: $0.gain, matchedBy: matchKinds[$0.uid] ?? .missing,
+                            limitEnabled: $0.limitEnabled ?? false, limitDb: $0.effectiveLimitDb, limitingDb: limiting[$0.uid])
             },
             devices: present.map {
                 DeviceState(uid: $0.uid, name: $0.name, transport: $0.transportName, channels: $0.outputChannels, sampleRate: $0.nominalRate)
@@ -235,10 +250,12 @@ final class Controller {
         try save()
     }
 
-    func setOutput(uid: String, delayMs: Double?, gain: Double?) throws {
+    func setOutput(uid: String, delayMs: Double?, gain: Double?, limitEnabled: Bool? = nil, limitDb: Double? = nil) throws {
         guard let i = config.outputs.firstIndex(where: { $0.uid == uid }) else { throw APIError.notFound("output not selected: \(uid)") }
         if let d = delayMs { config.outputs[i].delayMs = try Validate.delayMs(d) }
         if let g = gain { config.outputs[i].gain = try Validate.gain(g) }
+        if let l = limitDb { config.outputs[i].limitDb = try Validate.limitDb(l) }
+        if let e = limitEnabled { config.outputs[i].limitEnabled = e }
         applyLevels()
         try save()
     }
@@ -249,6 +266,7 @@ final class Controller {
         for (i, o) in config.outputs.enumerated() where i < p.outputs.count {
             p.setDelay(output: i, ms: o.delayMs)
             p.setGain(output: i, Float(o.gain))
+            p.setLimiter(output: i, ceilingDb: o.activeLimitDb)
         }
     }
 
@@ -261,7 +279,8 @@ final class Controller {
         config.outputs = valid.map { uid in
             let name = present.first { $0.uid == uid }!.name
             let prior = known.first { $0.uid == uid }
-            return SavedOutput(uid: uid, name: name, delayMs: prior?.delayMs ?? 0, gain: prior?.gain ?? 1)
+            return SavedOutput(uid: uid, name: name, delayMs: prior?.delayMs ?? 0, gain: prior?.gain ?? 1,
+                               limitEnabled: prior?.limitEnabled, limitDb: prior?.limitDb)
         }
         try save()
         await rebuild(position: 0)

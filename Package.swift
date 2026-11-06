@@ -21,6 +21,7 @@ let package = Package(
             ]
         ),
         .testTarget(name: "ssyncdTests", dependencies: ["ssyncd"]),
+        .testTarget(name: "AudioEngineTests", dependencies: ["AudioEngine"]),
     ],
     swiftLanguageModes: [.v5]
 )

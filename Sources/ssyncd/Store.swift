@@ -7,6 +7,13 @@ struct SavedOutput: Codable, Equatable, Sendable {
     var name: String
     var delayMs: Double
     var gain: Double
+    /// Optional peak limiter for this speaker only. The ceiling is kept while off.
+    var limitEnabled: Bool? = nil
+    var limitDb: Double? = nil
+
+    var effectiveLimitDb: Double { limitDb ?? -12 }
+    /// The ceiling to apply, or nil when the limiter is off.
+    var activeLimitDb: Double? { limitEnabled == true ? effectiveLimitDb : nil }
 }
 
 struct Profile: Codable, Sendable {

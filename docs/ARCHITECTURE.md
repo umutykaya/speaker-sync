@@ -59,6 +59,14 @@ Spotify ──► Core Audio process tap (muted while tapped) ──► private 
 - Permission: capturing other apps' audio needs System Audio Recording consent. Without it macOS delivers silence, not an error, so the UI shows the input level and explains silence. The installer wraps ssyncd in a minimal ad-hoc-signed `SpeakerSync.app` with `NSAudioCaptureUsageDescription` so macOS has an identity to attach the consent to.
 - Known quirk: creating a bundle-ID tap right after tearing down a previous aggregate can fail with status 0 and no tap object. The controller retries for up to 2 s; switching sources takes about 1.5 s.
 
+## Per-speaker limiter
+
+Optional, per output: after that speaker's volume and master, a peak limiter holds the signal under a ceiling (−40…0 dBFS). Attack is instant, so there is no overshoot and no lookahead delay; release is a 150 ms one-pole. Quiet passages pass unchanged and other speakers are never affected. The render thread publishes the deepest reduction per cycle; the controller reads it once per second for the UI. The ceiling is digital level, not SPL: the speaker's own volume still sets loudness. Unit-tested in `Tests/AudioEngineTests`.
+
+## More than two outputs
+
+The aggregate holds up to 8 sub-devices: the first is the clock, every other one is drift-compensated. Each speaker gets its own channel range, delay, volume and limiter. Wired outputs have about 10–20 ms latency against roughly 150–250 ms for Bluetooth, so they need the larger delay. A group must run at one sample rate. Mixing 44.1 kHz Bluetooth with 48 kHz wired devices relies on the HAL switching or resampling the sub-devices; this is untested on hardware.
+
 ## Sleep
 
 While a file is playing, or an unmuted live source has received audio in the last minute, `ssyncd` holds a `PreventUserIdleSystemSleep` power assertion (visible in `pmset -g assertions` as "Speaker Sync is playing"). It releases the assertion on pause, stop, end of track or speaker loss, so the Mac can idle-sleep normally otherwise. Closing the lid or choosing Sleep manually still sleeps the Mac.

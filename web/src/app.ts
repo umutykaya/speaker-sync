@@ -5,7 +5,10 @@
 type MatchKind = "uid" | "name" | "missing";
 type Status = "noOutputs" | "loading" | "playing" | "paused" | "ended" | "error";
 
-interface OutputState { uid: string; name: string; delayMs: number; gain: number; matchedBy: MatchKind }
+interface OutputState {
+  uid: string; name: string; delayMs: number; gain: number; matchedBy: MatchKind;
+  limitEnabled: boolean; limitDb: number; limitingDb?: number;
+}
 interface DeviceState { uid: string; name: string; transport: string; channels: number; sampleRate: number }
 interface Track { id: string; name: string; bytes: number; durationSeconds: number; addedAt: string }
 interface ProfileState { name: string; savedAt: string; outputs: string[] }
@@ -31,6 +34,7 @@ const TOKEN_KEY = "ssync.token";
 const MUTE_KEY = "ssync.unmuteGain";
 const POLL_MS = 1000;
 const MAX_DELAY = 2000;
+const MAX_OUTPUTS = 8;
 const LIVE_SOURCES: [string, string, string][] = [
   ["com.spotify.client", "Spotify", "Whatever Spotify plays on this Mac"],
   ["all", "All Mac audio", "Every app, including notification sounds"],
@@ -147,6 +151,7 @@ function fmtTime(s: number): string {
 }
 const fmtMs = (v: number) => `${Number.isInteger(v) ? v : v.toFixed(1)} ms`;
 const fmtPct = (g: number) => `${Math.round(g * 100)}%`;
+const fmtDb = (db: number) => `${db < 0 ? "−" : ""}${Math.abs(Math.round(db))} dB`;
 
 function setFill(slider: HTMLInputElement): void {
   const min = Number(slider.min), max = Number(slider.max) || 1;
@@ -312,8 +317,25 @@ function renderOutputs(outputs: OutputState[]): void {
     const gain = el("input", { class: "slider", type: "range", min: "0", max: "100", step: "1", "aria-label": `${o.name} volume`, "data-role": "gain" });
     const delayInput = el("input", { type: "number", inputmode: "decimal", min: "0", max: String(MAX_DELAY), step: "0.5", "aria-label": `${o.name} delay in milliseconds`, "data-role": "delay" });
     const mute = el("button", { class: "small-btn mute", type: "button", "data-role": "mute" }, "Mute");
+    const limitOn = el("input", { type: "checkbox", class: "check", id: `lim-${o.uid.replace(/[^a-zA-Z0-9]/g, "_")}`, "data-role": "limit-on" });
+    const limitDb = el("input", { class: "slider", type: "range", min: "-40", max: "0", step: "1", "aria-label": `${o.name} level limit in dB`, "data-role": "limit-db" });
     holdWhileTouching(gain, key("gain"));
     holdWhileTouching(delayInput, key("delay"));
+    holdWhileTouching(limitOn, key("limit-on"));
+    holdWhileTouching(limitDb, key("limit-db"));
+
+    limitOn.addEventListener("change", () => {
+      const row = limitOn.closest(".output");
+      row?.querySelector<HTMLElement>('[data-role="limit-controls"]')?.toggleAttribute("hidden", !limitOn.checked);
+      act(() => post("output", { uid: o.uid, limitEnabled: limitOn.checked }));
+    });
+    const sendLimit = throttle((db: number) => act(() => post("output", { uid: o.uid, limitDb: db })), 150);
+    limitDb.addEventListener("input", () => {
+      setFill(limitDb);
+      setText(o.uid, "limit-val", fmtDb(Number(limitDb.value)));
+      sendLimit(Number(limitDb.value));
+    });
+    limitDb.addEventListener("change", () => sendLimit.flush());
 
     const sendGain = throttle((g: number) => act(() => post("output", { uid: o.uid, gain: g })), 150);
     gain.addEventListener("input", () => {
@@ -356,6 +378,18 @@ function renderOutputs(outputs: OutputState[]): void {
       ),
       el("label", { class: "slider-label" }, "Volume ", el("output", { "data-role": "gain-val" }, "")),
       gain,
+      el("div", { class: "limit" },
+        el("div", { class: "limit-head" },
+          limitOn,
+          el("label", { for: limitOn.id, class: "grow" }, "Limit level"),
+          el("span", { class: "limiting", "data-role": "limiting", hidden: "" }, ""),
+        ),
+        el("div", { "data-role": "limit-controls", hidden: "" },
+          el("label", { class: "slider-label" }, "Ceiling ", el("output", { "data-role": "limit-val" }, "")),
+          limitDb,
+          el("p", { class: "muted small limit-help" }, "Caps loud peaks on this speaker only. Quieter parts and the other speaker are not affected."),
+        ),
+      ),
       el("div", { class: "delay" },
         el("div", { class: "delay-label" }, "Delay", el("span", { class: "muted", "data-role": "delay-val" }, "")),
         el("div", { class: "delay-controls" }, b[0]!, b[1]!, delayInput, b[2]!, b[3]!),
@@ -369,7 +403,7 @@ function updateOutputs(outputs: OutputState[]): void {
     const row = document.querySelector<HTMLElement>(`.output[data-uid="${CSS.escape(o.uid)}"]`);
     if (!row) return;
     const q = <T extends HTMLElement>(role: string) => row.querySelector<T>(`[data-role="${role}"]`)!;
-    const clock = i === 0 && outputs.length > 1 ? "Clock" : i === 1 ? "Drift-corrected" : "";
+    const clock = outputs.length < 2 ? "" : i === 0 ? "Clock" : "Drift-corrected";
     const by = o.matchedBy === "name" ? "found by name" : o.matchedBy === "missing" ? "not connected" : "";
     q("badge").textContent = [clock, by].filter(Boolean).join(" · ");
     if (!busyControls.has(`gain:${o.uid}`)) {
@@ -379,6 +413,20 @@ function updateOutputs(outputs: OutputState[]): void {
       q("gain-val").textContent = fmtPct(o.gain);
     }
     if (!busyControls.has(`delay:${o.uid}`)) q<HTMLInputElement>("delay").value = String(o.delayMs);
+    if (!busyControls.has(`limit-on:${o.uid}`)) {
+      q<HTMLInputElement>("limit-on").checked = o.limitEnabled;
+      q("limit-controls").toggleAttribute("hidden", !o.limitEnabled);
+    }
+    if (!busyControls.has(`limit-db:${o.uid}`)) {
+      const l = q<HTMLInputElement>("limit-db");
+      l.value = String(o.limitDb);
+      setFill(l);
+      q("limit-val").textContent = fmtDb(o.limitDb);
+    }
+    const limiting = q("limiting");
+    const active = o.limitEnabled && o.limitingDb !== undefined;
+    limiting.toggleAttribute("hidden", !active);
+    limiting.textContent = active ? `limiting ${fmtDb(o.limitingDb!)}` : "";
     q("delay-val").textContent = fmtMs(o.delayMs);
     const mute = q<HTMLButtonElement>("mute");
     const muted = o.gain === 0;
@@ -501,7 +549,7 @@ function renderDevices(s: State, rebuild: boolean): void {
     const cb = el("input", { type: "checkbox", class: "check", id, "data-uid": d.uid });
     cb.addEventListener("change", () => {
       pickerDirty = true;
-      if (cb.checked) { if (picked.length < 2) picked.push(d.uid); else cb.checked = false; }
+      if (cb.checked) { if (picked.length < MAX_OUTPUTS) picked.push(d.uid); else cb.checked = false; }
       else picked = picked.filter(u => u !== d.uid);
       syncPicker();
     });
@@ -519,12 +567,12 @@ function syncPicker(): void {
   document.querySelectorAll<HTMLInputElement>("#devices input[data-uid]").forEach(cb => {
     const uid = cb.dataset.uid!;
     cb.checked = picked.includes(uid);
-    cb.disabled = !cb.checked && picked.length >= 2;
+    cb.disabled = !cb.checked && picked.length >= MAX_OUTPUTS;
     const badge = document.querySelector<HTMLElement>(`[data-order="${CSS.escape(uid)}"]`);
     if (badge) {
       const i = picked.indexOf(uid);
       badge.hidden = i < 0;
-      badge.textContent = i === 0 ? "Clock" : "2";
+      badge.textContent = i === 0 ? "Clock" : String(i + 1);
     }
   });
   const same = state && sig(picked) === sig(state.outputs.map(o => o.uid));

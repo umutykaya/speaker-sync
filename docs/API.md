@@ -6,11 +6,11 @@ All responses are JSON. Every POST/DELETE returns the full state, so the client 
 |---|---|---|
 | `GET /api/health` | | `{"ok":true}`, no token |
 | `GET /api/state` | | Full state: status, position, outputs, devices, tracks, profiles |
-| `POST /api/outputs` | `{"uids":["…","…"]}` | Select 1–2 present outputs, first = clock. Rebuilds, paused at 0 |
+| `POST /api/outputs` | `{"uids":["…","…"]}` | Select 1–8 present outputs, first = clock. Rebuilds, paused at 0 |
 | `POST /api/transport` | `{"action":"play"\|"pause"\|"stop"}` | Stop = pause + seek 0 |
 | `POST /api/seek` | `{"seconds":12.5}` | 0…duration |
 | `POST /api/master` | `{"gain":0.5}` | 0…1 |
-| `POST /api/output` | `{"uid":"…","delayMs":12,"gain":0.8}` | delay 0…2000 ms, gain 0…1, either optional |
+| `POST /api/output` | `{"uid":"…","delayMs":12,"gain":0.8,"limitEnabled":true,"limitDb":-12}` | delay 0…2000 ms, gain 0…1, limiter on/off and ceiling −40…0 dB; all optional. The ceiling is kept while the limiter is off |
 | `POST /api/source` | `{"trackId":"…"}`, `{"trackId":null}` or `{"live":"com.spotify.client"\|"all"}` | Track, calibration click, or live Mac audio; lands paused (live: speakers muted) |
 | `PUT /api/tracks?name=song.mp3` | raw file bytes | Upload; returns the track (201) |
 | `DELETE /api/tracks/{id}` | | Delete file; switches to click if it was playing |
@@ -18,6 +18,8 @@ All responses are JSON. Every POST/DELETE returns the full state, so the client 
 | `POST /api/profiles/{name}/load` | | Apply the profile (devices matched by UID, then name) |
 | `DELETE /api/profiles/{name}` | | |
 | `POST /api/reconnect` | | Rebuild outputs at the current position, paused |
+
+Each entry in `outputs` has `limitEnabled`, `limitDb` and `limitingDb`: the deepest gain reduction in the last second, in dB, absent when not limiting.
 
 For a live source, `play`/`pause`/`stop` unmute/mute the speakers, `seek` returns 409, `positionSeconds`/`durationSeconds` are 0, and the state adds `inputLevelDb` (peak of the last second, absent when silent) and `liveSilentSeconds` (seconds since audio last arrived, -1 if none yet).
 

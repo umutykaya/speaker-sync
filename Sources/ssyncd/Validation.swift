@@ -11,11 +11,12 @@ struct APIError: Error, Sendable {
 
 enum Limits {
     static let maxDelayMs = 2000.0
-    static let maxOutputs = 2
+    static let maxOutputs = 8
     static let maxUploadBytes = 500 * 1024 * 1024
     static let maxLibraryBytes = 5 * 1024 * 1024 * 1024
     static let audioExtensions: Set<String> = ["mp3", "m4a", "aac", "wav", "aif", "aiff", "caf", "flac"]
     static let maxProfileNameLength = 40
+    static let limitDbRange = -40.0...0.0
 }
 
 enum Validate {
@@ -29,6 +30,11 @@ enum Validate {
         return v
     }
 
+    static func limitDb(_ v: Double) throws -> Double {
+        guard v.isFinite, Limits.limitDbRange.contains(v) else { throw APIError.bad("limitDb must be -40...0 dB") }
+        return v
+    }
+
     static func seek(_ v: Double, duration: Double) throws -> Double {
         guard v.isFinite, v >= 0, v <= duration else { throw APIError.bad("seconds must be 0...\(duration)") }
         return v
@@ -36,7 +42,7 @@ enum Validate {
 
     /// 1–2 distinct UIDs, each currently present.
     static func outputUIDs(_ uids: [String], present: Set<String>) throws -> [String] {
-        guard (1...Limits.maxOutputs).contains(uids.count) else { throw APIError.bad("select 1 or 2 outputs") }
+        guard (1...Limits.maxOutputs).contains(uids.count) else { throw APIError.bad("select 1 to \(Limits.maxOutputs) outputs") }
         guard Set(uids).count == uids.count else { throw APIError.bad("outputs must be distinct") }
         for u in uids where !present.contains(u) { throw APIError.bad("output not connected: \(u)") }
         return uids

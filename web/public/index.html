@@ -78,9 +78,9 @@
     <section class="card" aria-labelledby="cal-title">
       <h2 id="cal-title">Calibrate by ear</h2>
       <ol class="steps small">
-        <li>Place both speakers side by side, about 1 m away. Sit centered.</li>
+        <li>Place the speakers side by side, about 1 m away. Sit centered.</li>
         <li>Play the click. A double click means one speaker is early.</li>
-        <li>Mute one speaker at a time to find the early one.</li>
+        <li>Mute speakers one at a time to find the earliest; delay the others to match the latest one.</li>
         <li>Add delay to the early one with +10, then fine-tune with ±1 until you hear one click.</li>
         <li>Save a profile.</li>
       </ol>
@@ -112,7 +112,7 @@
     <!-- Output selection -->
     <details id="outputs-picker" class="card">
       <summary><h2>Outputs</h2><span id="picker-summary" class="muted small"></span></summary>
-      <p class="muted small">Pick up to two. The first one picked is the clock; the second is drift-corrected to follow it.</p>
+      <p class="muted small">Pick one or more (up to 8). The first one picked is the clock; the others are drift-corrected to follow it. Wired outputs (Mac speaker, USB monitor) are much faster than Bluetooth: give them the larger delay.</p>
       <ul id="devices" class="list"></ul>
       <button id="btn-apply-outputs" class="primary wide" type="button">Use selected outputs</button>
     </details>

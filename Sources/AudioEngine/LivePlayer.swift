@@ -8,7 +8,7 @@ import Synchronization
 ///
 /// Real-time rules as in Player: no locks, allocation or I/O in the IOProc.
 public final class LivePlayer {
-    public static let maxOutputs = 2
+    public static let maxOutputs = 8
     static let ringFrames = 1 << 18          // ~5.9 s at 44.1 kHz: covers 2000 ms delay with margin
     static let ringMask = ringFrames - 1
     static let delayFadeFrames = 1440
@@ -42,6 +42,7 @@ public final class LivePlayer {
     private let rtGain: UnsafeMutablePointer<Float>
     private var rtMaster: Float = 0
     private let smoothing: Float
+    private let limiter: LimiterControls
 
     public init(aggregateID: AudioObjectID, sampleRate: Double, outputs: [Player.OutputMap]) {
         precondition(!outputs.isEmpty && outputs.count <= LivePlayer.maxOutputs)
@@ -50,6 +51,7 @@ public final class LivePlayer {
         self.outputs = outputs
         outCount = outputs.count
         smoothing = Float(1 - exp(-1 / (0.010 * sampleRate)))
+        limiter = LimiterControls(count: outputs.count, sampleRate: sampleRate)
         ringL = .allocate(capacity: LivePlayer.ringFrames)
         ringR = .allocate(capacity: LivePlayer.ringFrames)
         ringL.initialize(repeating: 0, count: LivePlayer.ringFrames)
@@ -83,6 +85,9 @@ public final class LivePlayer {
     public func gain(output: Int) -> Float { Float(bitPattern: gainBits[output].load(ordering: .relaxed)) }
     public func setMaster(_ g: Float) { masterGainBits.store(min(max(g, 0), 1).bitPattern, ordering: .relaxed) }
     public var master: Float { Float(bitPattern: masterGainBits.load(ordering: .relaxed)) }
+    /// Per-speaker peak limiter; nil turns it off.
+    public func setLimiter(output: Int, ceilingDb: Double?) { limiter.set(output: output, ceilingDb: ceilingDb) }
+    public func takeLimiterReductionDb(output: Int) -> Float { limiter.takeReductionDb(output: output) }
     public func takeInputPeak() -> Float { Float(bitPattern: inputPeakBits.exchange(0, ordering: .relaxed)) }
 
     public func start() throws {
@@ -151,6 +156,8 @@ public final class LivePlayer {
             let gainTarget = Float(bitPattern: gainBits[o].load(ordering: .relaxed))
             let target = delayTarget[o].load(ordering: .relaxed)
             var cur = rtDelayCur[o], old = rtDelayOld[o], fade = rtFadePos[o], g = rtGain[o], m = m0
+            let limitOn = limiter.enabled[o].load(ordering: .relaxed)
+            let ceiling = Float(bitPattern: limiter.ceilingBits[o].load(ordering: .relaxed))
             for n in 0..<frames {
                 if fade >= LivePlayer.delayFadeFrames && target != cur { old = cur; cur = target; fade = 0 }
                 let p = writePos + n
@@ -165,8 +172,11 @@ public final class LivePlayer {
                 g += (gainTarget - g) * smoothing
                 m += (masterTarget - m) * smoothing
                 let k = g * m
-                a = min(max(a * k, -1), 1)
-                c = min(max(c * k, -1), 1)
+                a *= k
+                c *= k
+                if limitOn { limiter.process(output: o, &a, &c, ceiling: ceiling, state: &limiter.state[o]) }
+                a = min(max(a, -1), 1)
+                c = min(max(c, -1), 1)
                 if let (pr, strideR) = chR {
                     chL[n * strideL] = a; pr[n * strideR] = c
                 } else {
@@ -174,6 +184,7 @@ public final class LivePlayer {
                 }
             }
             rtDelayCur[o] = cur; rtDelayOld[o] = old; rtFadePos[o] = fade; rtGain[o] = g
+            if limitOn { limiter.publish(output: o, state: &limiter.state[o]) } else { limiter.state[o].gain = 1 }
             if o == outCount - 1 { rtMaster = m }
         }
         writePos = (writePos + frames) & LivePlayer.ringMask

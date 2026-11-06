@@ -20,10 +20,11 @@ import Testing
     }
 
     @Test func outputSelection() throws {
-        let present: Set = ["a", "b", "c"]
+        let present = Set((1...9).map { "d\($0)" } + ["a", "b", "c"])
         #expect(try Validate.outputUIDs(["a", "b"], present: present) == ["a", "b"])
+        #expect(try Validate.outputUIDs(["a", "b", "c", "d1"], present: present).count == 4)
         #expect(throws: APIError.self) { try Validate.outputUIDs([], present: present) }
-        #expect(throws: APIError.self) { try Validate.outputUIDs(["a", "b", "c"], present: present) }
+        #expect(throws: APIError.self) { try Validate.outputUIDs((1...9).map { "d\($0)" }, present: present) }
         #expect(throws: APIError.self) { try Validate.outputUIDs(["a", "a"], present: present) }
         #expect(throws: APIError.self) { try Validate.outputUIDs(["x"], present: present) }
     }
@@ -57,6 +58,15 @@ import Testing
         let saved = [SavedOutput(uid: "gone", name: "JBL Go 4", delayMs: 0, gain: 1)]
         let present = [PresentDevice(uid: "x", name: "JBL Go 4"), PresentDevice(uid: "y", name: "JBL Go 4")]
         #expect(matchOutputs(saved, present: present)[0].kind == .missing)
+    }
+
+    @Test func limitBounds() throws {
+        #expect(try Validate.limitDb(-12) == -12)
+        #expect(try Validate.limitDb(0) == 0)
+        #expect(try Validate.limitDb(-40) == -40)
+        #expect(throws: APIError.self) { try Validate.limitDb(0.5) }
+        #expect(throws: APIError.self) { try Validate.limitDb(-41) }
+        #expect(throws: APIError.self) { try Validate.limitDb(.nan) }
     }
 
     @Test func liveTargets() throws {

@@ -64,7 +64,7 @@ while i < args.count {
     }
     i += 1
 }
-guard (1...Player.maxOutputs).contains(outUIDs.count), Set(outUIDs).count == outUIDs.count else {
+guard (1...2).contains(outUIDs.count), Set(outUIDs).count == outUIDs.count else {
     fail("pass one or two distinct --out UIDs (see `ssync-poc list`)")
 }
 guard click != (filePath != nil) else { fail("pass exactly one of --file or --click") }

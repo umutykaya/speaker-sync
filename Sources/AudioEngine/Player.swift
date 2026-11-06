@@ -19,7 +19,7 @@ public final class Player {
         }
     }
 
-    public static let maxOutputs = 2
+    public static let maxOutputs = 8
     public static let maxFrames = 16384
     public static let delayFadeFrames = 1440  // crossfade length when a delay changes (~30 ms @ 48 kHz)
 
@@ -51,6 +51,7 @@ public final class Player {
     private var rtMaster: Float = 0
     private var rtPlayhead = 0
     private let smoothing: Float
+    private let limiter: LimiterControls
 
     public init(aggregateID: AudioObjectID, sampleRate: Double, outputs: [OutputMap], source: Source) throws {
         precondition(!outputs.isEmpty && outputs.count <= Player.maxOutputs)
@@ -60,6 +61,7 @@ public final class Player {
         outCount = outputs.count
         totalChannels = outputs.map { $0.channelOffset + $0.channelCount }.max()!
         smoothing = Float(1 - exp(-1 / (0.010 * sampleRate)))  // ~10 ms one-pole gain smoothing
+        limiter = LimiterControls(count: outputs.count, sampleRate: sampleRate)
 
         delayTarget = .allocate(capacity: outCount)
         gainBits = .allocate(capacity: outCount)
@@ -96,6 +98,9 @@ public final class Player {
     }
     public func gain(output: Int) -> Float { Float(bitPattern: gainBits[output].load(ordering: .relaxed)) }
     public func setMaster(_ g: Float) { masterGainBits.store(min(max(g, 0), 1).bitPattern, ordering: .relaxed) }
+    /// Per-speaker peak limiter; nil turns it off.
+    public func setLimiter(output: Int, ceilingDb: Double?) { limiter.set(output: output, ceilingDb: ceilingDb) }
+    public func takeLimiterReductionDb(output: Int) -> Float { limiter.takeReductionDb(output: output) }
     public var master: Float { Float(bitPattern: masterGainBits.load(ordering: .relaxed)) }
     public func seek(seconds: Double) {
         ended.store(false, ordering: .relaxed)
@@ -220,6 +225,8 @@ public final class Player {
             let gainTarget = Float(bitPattern: gainBits[o].load(ordering: .relaxed))
             let target = delayTarget[o].load(ordering: .relaxed)
             var cur = rtDelayCur[o], old = rtDelayOld[o], fade = rtFadePos[o], g = rtGain[o]
+            let limitOn = limiter.enabled[o].load(ordering: .relaxed)
+            let ceiling = Float(bitPattern: limiter.ceilingBits[o].load(ordering: .relaxed))
             for f in 0..<frames {
                 if fade >= Player.delayFadeFrames && target != cur {
                     old = cur; cur = target; fade = 0
@@ -235,9 +242,12 @@ public final class Player {
                 }
                 g += (gainTarget - g) * smoothing
                 let k = g * rtMasterRamp[f]
+                l *= k
+                r *= k
+                if limitOn { limiter.process(output: o, &l, &r, ceiling: ceiling, state: &limiter.state[o]) }
                 // Gains are capped at 1.0; the hard clamp is a last-resort safety net.
-                l = min(max(l * k, -1), 1)
-                r = min(max(r * k, -1), 1)
+                l = min(max(l, -1), 1)
+                r = min(max(r, -1), 1)
                 if let chR {
                     chL[f] = l; chR[f] = r
                 } else {
@@ -245,6 +255,7 @@ public final class Player {
                 }
             }
             rtDelayCur[o] = cur; rtDelayOld[o] = old; rtFadePos[o] = fade; rtGain[o] = g
+            if limitOn { limiter.publish(output: o, state: &limiter.state[o]) } else { limiter.state[o].gain = 1 }
         }
     }
 }

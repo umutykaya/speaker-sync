@@ -71,7 +71,13 @@ struct SelectOutputsBody: Decodable { let uids: [String] }
 struct TransportBody: Decodable { let action: String }
 struct SeekBody: Decodable { let seconds: Double }
 struct GainBody: Decodable { let gain: Double }
-struct OutputBody: Decodable { let uid: String; let delayMs: Double?; let gain: Double? }
+struct OutputBody: Decodable {
+    let uid: String
+    let delayMs: Double?
+    let gain: Double?
+    let limitEnabled: Bool?
+    let limitDb: Double?
+}
 struct SourceBody: Decodable { let trackId: String?; let live: String? }
 struct ProfileBody: Decodable { let name: String }
 
@@ -111,7 +117,9 @@ func buildRouter(controller: Controller, store: Store, token: String, webRoot: S
     }
     api.post("output") { req, ctx in
         let b = try await req.decode(as: OutputBody.self, context: ctx)
-        try await MainActor.run { try controller.setOutput(uid: b.uid, delayMs: b.delayMs, gain: b.gain) }
+        try await MainActor.run {
+            try controller.setOutput(uid: b.uid, delayMs: b.delayMs, gain: b.gain, limitEnabled: b.limitEnabled, limitDb: b.limitDb)
+        }
         return try json(await controller.state())
     }
     api.post("outputs") { req, ctx in
